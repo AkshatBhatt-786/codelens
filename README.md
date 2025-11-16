@@ -15,7 +15,7 @@ A terminal-based Java code learning platform with GitHub synchronization and com
 
 ### Option 1: From Source
 ```bash
-git clone <repository-url>
+git clone <https://github.com/AkshatBhatt-786/codelens>
 cd codelens
 pip install -r requirements.txt
 python src/main.py
