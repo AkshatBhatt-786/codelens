@@ -7,15 +7,14 @@ from pathlib import Path
 from github import GithubException
 from rich.console import Console
 import questionary
-import getpass
 
 console = Console()
 
 class GitHubSync:
     def __init__(self):
         self.client = get_github_client()
-        self.personal_repo = "codelens-codes"
-        self.community_repo = None # Will be set dynamically
+        self.personal_repo = "codelens-java-codes"
+        self.community_repo = None  # Will be set dynamically
         self.contributors_file = "contributors/verified_contributors.json"
         self.requests_dir = "verification_requests"
     
@@ -27,7 +26,7 @@ class GitHubSync:
             "[green]username/repository-name[/green] or [green]organization/repository-name[/green]\n\n"
             "Examples:\n"
             "• [cyan]code-lens-community/java-codes[/cyan] (organization)\n"
-            f"• [cyan]{getpass.getuser()}/java-community[/cyan] (personal)",
+            "• [cyan]AkshatBhatt-786/java-community[/cyan] (personal)",
             title="Community Setup",
             border_style="yellow"
         ))
@@ -256,3 +255,87 @@ class GitHubSync:
         except Exception as e:
             console.print(f"[red]Failed to fetch community files: {e}[/red]")
             return []
+    
+    def setup_repo(self):
+        """Setup personal repository"""
+        if not self.client:
+            return None
+            
+        try:
+            repo = self.client.get_user().get_repo(self.personal_repo)
+            return repo
+        except GithubException as e:
+            if e.status == 404:
+                try:
+                    repo = self.client.get_user().create_repo(
+                        self.personal_repo,
+                        description="CodeLens Java Learning Codes",
+                        private=False
+                    )
+                    return repo
+                except GithubException:
+                    return None
+            return None
+    
+    def upload_file(self, file_path, category):
+        """Upload file to personal repository"""
+        repo = self.setup_repo()
+        if not repo:
+            return False
+            
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            file_name = os.path.basename(file_path)
+            repo_path = f"{category}/{file_name}"
+            
+            repo.create_file(
+                repo_path,
+                f"Add {file_name} via CodeLens",
+                content,
+                branch="main"
+            )
+            return True
+        except Exception as e:
+            print(f"Upload error: {e}")
+            return False
+    
+    def list_remote_files(self, category=None):
+        """List files from personal repository"""
+        repo = self.setup_repo()
+        if not repo:
+            return []
+            
+        try:
+            contents = repo.get_contents(category) if category else repo.get_contents("")
+            files = []
+            for content in contents:
+                files.append({
+                    "name": content.name,
+                    "path": content.path,
+                    "type": "file" if content.type == "file" else "dir"
+                })
+            return files
+        except:
+            return []
+    
+    def download_file(self, remote_path, local_path):
+        """Download a file from GitHub to local storage"""
+        repo = self.setup_repo()
+        if not repo:
+            return False
+            
+        try:
+            file_content = repo.get_contents(remote_path)
+            local_path = Path(local_path)
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(local_path, 'w', encoding='utf-8') as f:
+                f.write(file_content.decoded_content.decode())
+            
+            console.print(f"[green]Downloaded: {remote_path}[/green]")
+            return True
+        except Exception as e:
+            console.print(f"[red]Download failed: {e}[/red]")
+            return False

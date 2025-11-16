@@ -14,7 +14,15 @@ import getpass
 from file_manager import FileManager
 from github_sync import GitHubSync
 
-sys.path.append(os.path.dirname(__file__))
+# Add src to path for both development and PyInstaller
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    application_path = sys._MEIPASS
+else:
+    # Running as script
+    application_path = os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, application_path)
 
 file_manager = FileManager()
 console = Console()
@@ -37,8 +45,16 @@ def loading_screen(task_name, duration=3):
             time.sleep(0.1)
 
 def display_header():
+    from config_manager import ConfigManager
+    config = ConfigManager()
+    
+    if config.is_authenticated():
+        auth_status = "[green]GITHUB CONNECTED[/green]"
+    else:
+        auth_status = "[yellow]RUN 'auth' TO SETUP GITHUB SYNC[/yellow]"
+    
     header = Panel(
-        Text(f"CODE-LENS v{VERSION} - Java Learning Platform", style="bold cyan"),
+        Text(f"CODE-LENS v{VERSION} | {auth_status}", style="bold cyan"),
         box=box.DOUBLE,
         border_style="bright_blue"
     )
@@ -51,7 +67,7 @@ def show_menu():
         header_style="bold magenta",
         title_style="bold cyan"
     )
-    menu_table.add_column("Command", style="bold green", width=20)
+    menu_table.add_column("Command", style="bold green", width=15)
     menu_table.add_column("Description", style="white")
     
     commands = [
@@ -71,6 +87,50 @@ def show_menu():
         menu_table.add_row(cmd, desc)
     
     console.print(menu_table)
+
+def upload_file():
+    if not github_sync.client:
+        console.print(Panel(
+            "[red]Please setup GitHub authentication first using 'auth' command[/red]",
+            title="Authentication Required",
+            border_style="red"
+        ))
+        input("Press Enter to continue...")
+        return
+    
+    file_path = questionary.path("Enter file path:").ask()
+    
+    if file_path and Path(file_path).exists():
+        category = questionary.text(
+            "Enter category name:",
+            instruction="(creates directory if new)"
+        ).ask()
+        
+        if category:
+            category_path = Path("java_files") / category
+            category_path.mkdir(exist_ok=True)
+            
+            loading_screen(f"Uploading to {category}", 3)
+            if github_sync.upload_file(file_path, category):
+                console.print(Panel(
+                    f"[green]File successfully uploaded to GitHub/{category}/[/green]",
+                    title="Upload Successful",
+                    border_style="green"
+                ))
+            else:
+                console.print(Panel(
+                    "[red]Upload failed - check your GitHub token and connection[/red]",
+                    title="Upload Failed",
+                    border_style="red"
+                ))
+    else:
+        console.print(Panel(
+            "[red]File not found or invalid path[/red]",
+            title="File Error",
+            border_style="red"
+        ))
+    
+    input("Press Enter to continue...")
 
 def upload_to_community():
     """Upload file to community repository"""
@@ -123,6 +183,60 @@ def upload_to_community():
             "[red]File not found or invalid path[/red]",
             title="File Error",
             border_style="red"
+        ))
+    
+    input("Press Enter to continue...")
+
+def fetch_files():
+    if not github_sync.client:
+        console.print(Panel(
+            "[red]Please setup GitHub authentication first using 'auth' command[/red]",
+            title="Authentication Required",
+            border_style="red"
+        ))
+        input("Press Enter to continue...")
+        return
+    
+    category = questionary.text(
+        "Enter category name:",
+        instruction="(creates directory if new)"
+    ).ask()
+    
+    if not category:
+        return
+    
+    category_path = Path("java_files") / category
+    category_path.mkdir(exist_ok=True)
+    
+    loading_screen(f"Fetching files for {category}", 3)
+    files = github_sync.list_remote_files(category)
+    
+    if files:
+        file_choices = [f["name"] for f in files if f["type"] == "file"]
+        selected_files = questionary.checkbox(
+            f"Select files to download to '{category}':",
+            choices=file_choices
+        ).ask()
+        
+        if selected_files:
+            loading_screen(f"Downloading {len(selected_files)} files", 3)
+            success_count = 0
+            for file_name in selected_files:
+                remote_path = f"{category}/{file_name}"
+                local_path = category_path / file_name
+                if github_sync.download_file(remote_path, local_path):
+                    success_count += 1
+            
+            console.print(Panel(
+                f"[green]Successfully downloaded {success_count}/{len(selected_files)} files to {category}/[/green]",
+                title="Download Complete",
+                border_style="green"
+            ))
+    else:
+        console.print(Panel(
+            f"[yellow]No files found in category '{category}'[/yellow]",
+            title="No Files Found",
+            border_style="yellow"
         ))
     
     input("Press Enter to continue...")
@@ -239,104 +353,6 @@ def request_verification():
                 title="Request Failed",
                 border_style="red"
             ))
-    
-    input("Press Enter to continue...")
-
-def upload_file():
-    if not github_sync.client:
-        console.print(Panel(
-            "[red]Please setup GitHub authentication first using 'auth' command[/red]",
-            title="Authentication Required",
-            border_style="red"
-        ))
-        input("Press Enter to continue...")
-        return
-    
-    file_path = questionary.path("Enter file path:").ask()
-    
-    if file_path and Path(file_path).exists():
-        category = questionary.text(
-            "Enter category name:",
-            instruction="(creates directory if new)"
-        ).ask()
-        
-        if category:
-            category_path = Path("java_files") / category
-            category_path.mkdir(exist_ok=True)
-            
-            loading_screen(f"Uploading to {category}", 3)
-            if github_sync.upload_file(file_path, category):
-                console.print(Panel(
-                    f"[green]File successfully uploaded to GitHub/{category}/[/green]",
-                    title="Upload Successful",
-                    border_style="green"
-                ))
-            else:
-                console.print(Panel(
-                    "[red]Upload failed - check your GitHub token and connection[/red]",
-                    title="Upload Failed",
-                    border_style="red"
-                ))
-    else:
-        console.print(Panel(
-            "[red]File not found or invalid path[/red]",
-            title="File Error",
-            border_style="red"
-        ))
-    
-    input("Press Enter to continue...")
-
-def fetch_files():
-    if not github_sync.client:
-        console.print(Panel(
-            "[red]Please setup GitHub authentication first using 'auth' command[/red]",
-            title="Authentication Required",
-            border_style="red"
-        ))
-        input("Press Enter to continue...")
-        return
-    
-    category = questionary.text(
-        "Enter category name:",
-        instruction="(creates directory if new)"
-    ).ask()
-    
-    if not category:
-        return
-    
-    category_path = Path("java_files") / category
-    category_path.mkdir(exist_ok=True)
-    
-    loading_screen(f"Fetching files for {category}", 3)
-    files = github_sync.list_remote_files(category)
-    
-    if files:
-        file_choices = [f["name"] for f in files if f["type"] == "file"]
-        selected_files = questionary.checkbox(
-            f"Select files to download to '{category}':",
-            choices=file_choices
-        ).ask()
-        
-        if selected_files:
-            loading_screen(f"Downloading {len(selected_files)} files", 3)
-            success_count = 0
-            for file_name in selected_files:
-                remote_path = f"{category}/{file_name}"
-                local_path = category_path / file_name
-                if github_sync.download_file(remote_path, local_path):
-                    success_count += 1
-            
-            console.print(Panel(
-                f"[green]Successfully downloaded {success_count}/{len(selected_files)} files to {category}/[/green]",
-                title="Download Complete",
-                border_style="green"
-            ))
-    else:
-        console.print(Panel(
-            f"[yellow]No files found in category '{category}'[/yellow]",
-            title="No Files Found",
-            border_style="yellow"
-        ))
     
     input("Press Enter to continue...")
 
@@ -468,6 +484,9 @@ def main():
         elif command == "upload":
             loading_screen("Initializing upload", 2)
             upload_file()
+        elif command == "upload-community":
+            loading_screen("Initializing community upload", 2)
+            upload_to_community()
         elif command == "sync":
             loading_screen("Syncing with GitHub", 3)
             console.print(Panel(
@@ -479,6 +498,11 @@ def main():
         elif command == "fetch":
             loading_screen("Initializing file fetch", 2)
             fetch_files()
+        elif command == "fetch-community":
+            loading_screen("Initializing community fetch", 2)
+            fetch_from_community()
+        elif command == "verify-me":
+            request_verification()
         elif command == "auth":
             from github_auth import setup_authentication
             setup_authentication()
@@ -489,33 +513,6 @@ def main():
                 border_style="yellow"
             ))
             input("Press Enter to continue...")
-        elif command == "auth-status":
-            from config_manager import ConfigManager
-            config = ConfigManager()
-            token = config.get_github_token()
-            if token:
-                console.print(Panel(
-                    f"[green]Token found: {token[:10]}...[/green]\n"
-                    f"Length: {len(token)} characters\n"
-                    f"Authenticated: {config.is_authenticated()}",
-                    title="Auth Status",
-                    border_style="green"
-                ))
-            else:
-                console.print(Panel(
-                    "[red]No token found[/red]",
-                    title="Auth Status", 
-                    border_style="red"
-                ))
-            input("Press Enter to continue...")
-        elif command == "upload-community":
-            loading_screen("Initializing community upload", 2)
-            upload_to_community()
-        elif command == "fetch-community":
-            loading_screen("Initializing community fetch", 2)
-            fetch_from_community()
-        elif command == "verify-me":
-            request_verification()
         else:
             console.print(Panel(
                 f"[red]Unknown command: {command}[/red]",
