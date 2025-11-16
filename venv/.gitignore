@@ -8,6 +8,7 @@ env*/
 
 # Python
 __pycache__/
+.java_files
 *.py[cod]
 *$py.class
 *.so
