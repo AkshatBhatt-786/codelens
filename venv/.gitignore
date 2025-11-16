@@ -1,0 +1,61 @@
+# Virtual environments
+venv/
+env/
+.venv/
+venv*/
+env*/
+.venv*/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# CodeLens specific
+local_data/
+config.json
+.env
+*.token
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
